@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: yssmRecipe
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/yssm_recipe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Taipei&characterEncoding=utf8}
+    username: ${SPRING_DATASOURCE_USERNAME:yssm}
+    password: ${SPRING_DATASOURCE_PASSWORD:yssm}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Taipei
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  cache:
+    type: redis
+    cache-names: recipeVersionItemSearch
+    redis:
+      time-to-live: 10m
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  elasticsearch:
+    uris: ${SPRING_ELASTICSEARCH_URIS:http://localhost:9200}
+server:
+  port: ${SERVER_PORT:8080}
+
+logging:
+  level:
+    org.hibernate.SQL: debug

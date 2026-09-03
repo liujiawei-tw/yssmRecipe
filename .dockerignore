@@ -1,0 +1,9 @@
+target
+frontend/node_modules
+frontend/dist
+frontend/dist-temp
+.git
+.idea
+.m2
+.env
+.env.*
