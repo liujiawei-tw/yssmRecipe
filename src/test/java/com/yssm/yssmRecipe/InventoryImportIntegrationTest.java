@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -157,5 +158,91 @@ class InventoryImportIntegrationTest extends AbstractH2IntegrationTest {
                 materialRepository.findByMaterialCode("MAT-IMP-EXCEL").orElseThrow().getId()
             )
         ).isPresent();
+    }
+
+    @Test
+    void shouldShowOnlyLatestImportedProductStockBatchInProductionPlans() throws Exception {
+        Material material = materialRepository.save(new Material("MAT-BATCH-001", "批次原料", "g"));
+        Recipe recipe = recipeRepository.save(new Recipe("REC-BATCH-001", "批次配方"));
+        RecipeVersion version = new RecipeVersion(recipe, LocalDate.of(2026, 9, 4), new BigDecimal("100"), RecipeVersionStatus.ACTIVE);
+        version.getItems().add(new RecipeVersionItem(version, material, new BigDecimal("1"), 1));
+        recipeVersionRepository.save(version);
+
+        Product productA = saveConfiguredProduct("PRD-BATCH-A", "批次商品A", recipe);
+        saveConfiguredProduct("PRD-BATCH-B", "批次商品B", recipe);
+
+        MockMultipartFile firstFile = new MockMultipartFile(
+            "file",
+            "product-stock-first.csv",
+            "text/csv",
+            """
+            product_code,stock_quantity
+            PRD-BATCH-A,10
+            PRD-BATCH-B,20
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/inventory-imports/product-stock").file(firstFile))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.importedCount").value(2));
+
+        MockMultipartFile secondFile = new MockMultipartFile(
+            "file",
+            "product-stock-second.csv",
+            "text/csv",
+            """
+            product_code,stock_quantity
+            PRD-BATCH-A,30
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/inventory-imports/product-stock").file(secondFile))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.importedCount").value(1));
+
+        mockMvc.perform(get("/api/production-plans/latest"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].productCode").value(productA.getProductCode()))
+            .andExpect(jsonPath("$[0].currentStock").value(30));
+    }
+
+    @Test
+    void shouldImportProductStockWhenSuggestedProductionQuantityIsZero() throws Exception {
+        Material material = materialRepository.save(new Material("MAT-ZERO-001", "零生產原料", "g"));
+        Recipe recipe = recipeRepository.save(new Recipe("REC-ZERO-001", "零生產配方"));
+        RecipeVersion version = new RecipeVersion(recipe, LocalDate.of(2026, 9, 4), new BigDecimal("100"), RecipeVersionStatus.ACTIVE);
+        version.getItems().add(new RecipeVersionItem(version, material, new BigDecimal("1"), 1));
+        recipeVersionRepository.save(version);
+        Product product = saveConfiguredProduct("PRD-ZERO-001", "零生產商品", recipe);
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "product-stock-zero.csv",
+            "text/csv",
+            """
+            product_code,stock_quantity
+            PRD-ZERO-001,100
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/inventory-imports/product-stock").file(file))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.importedCount").value(1));
+
+        mockMvc.perform(get("/api/production-plans/latest"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].productCode").value(product.getProductCode()))
+            .andExpect(jsonPath("$[0].plannedQuantity").value(0))
+            .andExpect(jsonPath("$[0].calculationWeightG").value(0))
+            .andExpect(jsonPath("$[0].materialRequirements.length()").value(0));
+    }
+
+    private Product saveConfiguredProduct(String productCode, String productName, Recipe recipe) {
+        Product product = productRepository.save(new Product(productCode, productName, 10, 100, "PCS"));
+        productPackagingRepository.save(new ProductPackaging(product, "PCS", new BigDecimal("10"), "10g/pcs"));
+        productRecipeMappingRepository.save(new ProductRecipeMapping(product, recipe, true, true, 1));
+        return product;
     }
 }

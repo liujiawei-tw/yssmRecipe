@@ -129,6 +129,37 @@ class RecipeVersionItemCrudIntegrationTest extends AbstractH2IntegrationTest {
             .andExpect(jsonPath("$.length()").value(0));
     }
 
+    @Test
+    void forceUpdateShouldSaveActiveVersionItemWhenDisplayOrderConflicts() throws Exception {
+        Long firstItemId = recipeVersionItemRepository
+            .search(null, recipeVersionId, null)
+            .stream()
+            .filter(item -> item.getDisplayOrder() == 1)
+            .findFirst()
+            .orElseThrow()
+            .getId();
+
+        mockMvc.perform(put("/api/recipe-version-items/{id}", firstItemId)
+                .param("force", "true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "recipeVersionId": %d,
+                      "materialId": %d,
+                      "ratio": 5,
+                      "displayOrder": 2
+                    }
+                    """.formatted(recipeVersionId, materialCId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.ratio").value(5))
+            .andExpect(jsonPath("$.displayOrder").value(2));
+
+        mockMvc.perform(get("/api/recipe-version-items")
+                .param("recipeVersionId", String.valueOf(recipeVersionId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2));
+    }
+
     private void createItem(String body) throws Exception {
         mockMvc.perform(post("/api/recipe-version-items")
                 .contentType(MediaType.APPLICATION_JSON)

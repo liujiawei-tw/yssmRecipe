@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -44,8 +45,12 @@ public class RecipeVersionController {
     }
 
     @PutMapping("/recipe-versions/{id}")
-    public RecipeVersionResponse update(@PathVariable Long id, @Valid @RequestBody RecipeVersionUpsertRequest request) {
-        return recipeVersionService.update(id, request);
+    public RecipeVersionResponse update(
+        @PathVariable Long id,
+        @RequestParam(defaultValue = "false") boolean force,
+        @Valid @RequestBody RecipeVersionUpsertRequest request
+    ) {
+        return recipeVersionService.update(id, request, force);
     }
 
     @DeleteMapping("/recipe-versions/{id}")

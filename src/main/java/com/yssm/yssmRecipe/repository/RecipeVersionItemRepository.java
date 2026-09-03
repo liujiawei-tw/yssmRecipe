@@ -31,4 +31,8 @@ public interface RecipeVersionItemRepository extends JpaRepository<RecipeVersion
     long countByRecipeVersionId(Long recipeVersionId);
 
     void deleteByMaterialId(Long materialId);
+
+    void deleteByRecipeVersionId(Long recipeVersionId);
+
+    void deleteByRecipeVersionRecipeId(Long recipeId);
 }

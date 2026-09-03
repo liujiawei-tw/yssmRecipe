@@ -10,8 +10,12 @@ import com.yssm.yssmRecipe.dto.recipe.RecipeVersionItemResponse;
 import com.yssm.yssmRecipe.dto.recipe.RecipeVersionResponse;
 import com.yssm.yssmRecipe.dto.recipe.RecipeVersionUpsertRequest;
 import com.yssm.yssmRecipe.exception.NotFoundException;
+import com.yssm.yssmRecipe.repository.MaterialRequirementRepository;
 import com.yssm.yssmRecipe.repository.MaterialRepository;
+import com.yssm.yssmRecipe.repository.ProductionPlanRepository;
+import com.yssm.yssmRecipe.repository.PurchaseSuggestionItemSourceRepository;
 import com.yssm.yssmRecipe.repository.RecipeRepository;
+import com.yssm.yssmRecipe.repository.RecipeVersionItemRepository;
 import com.yssm.yssmRecipe.repository.RecipeVersionRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,6 +33,10 @@ public class RecipeVersionService {
 
     private final RecipeRepository recipeRepository;
     private final RecipeVersionRepository recipeVersionRepository;
+    private final RecipeVersionItemRepository recipeVersionItemRepository;
+    private final MaterialRequirementRepository materialRequirementRepository;
+    private final ProductionPlanRepository productionPlanRepository;
+    private final PurchaseSuggestionItemSourceRepository purchaseSuggestionItemSourceRepository;
     private final MaterialRepository materialRepository;
 
     @Transactional(readOnly = true)
@@ -69,12 +77,18 @@ public class RecipeVersionService {
     @Transactional
     @CacheEvict(cacheNames = "recipeVersionItemSearch", allEntries = true)
     public RecipeVersionResponse update(Long id, RecipeVersionUpsertRequest request) {
+        return update(id, request, false);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "recipeVersionItemSearch", allEntries = true)
+    public RecipeVersionResponse update(Long id, RecipeVersionUpsertRequest request, boolean force) {
         RecipeVersion version = find(id);
         version.setVersionDate(request.versionDate());
         version.setBaseWeightG(request.baseWeightG());
         version.setStatus(RecipeVersionStatus.valueOf(request.status()));
         version.setCreatedBy(request.createdBy());
-        updateItems(version, request.items());
+        updateItems(version, request.items(), force);
         RecipeVersion saved = recipeVersionRepository.save(version);
         ensureSingleActiveVersion(saved.getRecipe().getId(), saved.getId(), saved.getStatus());
         return toResponse(saved);
@@ -83,7 +97,14 @@ public class RecipeVersionService {
     @Transactional
     @CacheEvict(cacheNames = "recipeVersionItemSearch", allEntries = true)
     public void delete(Long id) {
-        recipeVersionRepository.delete(find(id));
+        RecipeVersion version = find(id);
+        purchaseSuggestionItemSourceRepository.deleteByProductionPlanRecipeVersionId(id);
+        purchaseSuggestionItemSourceRepository.deleteByMaterialRequirementRecipeVersionId(id);
+        materialRequirementRepository.deleteByRecipeVersionId(id);
+        productionPlanRepository.deleteByRecipeVersionId(id);
+        recipeVersionItemRepository.deleteByRecipeVersionId(id);
+        recipeVersionRepository.delete(version);
+        recipeVersionRepository.flush();
     }
 
     @Transactional
@@ -94,7 +115,7 @@ public class RecipeVersionService {
         clone.setCreatedBy(request.createdBy());
         List<RecipeVersionItemRequest> items = request.items();
         if (items == null || items.isEmpty()) {
-            items = source.getItems().stream()
+            items = recipeVersionItemRepository.findByRecipeVersionIdOrderByDisplayOrderAscIdAsc(source.getId()).stream()
                 .sorted(Comparator.comparing(item -> item.getDisplayOrder() == null ? Integer.MAX_VALUE : item.getDisplayOrder()))
                 .map(item -> new RecipeVersionItemRequest(item.getMaterial().getId(), item.getRatio(), item.getDisplayOrder()))
                 .toList();
@@ -132,21 +153,22 @@ public class RecipeVersionService {
         return items;
     }
 
-    private void updateItems(RecipeVersion version, List<RecipeVersionItemRequest> requests) {
+    private void updateItems(RecipeVersion version, List<RecipeVersionItemRequest> requests, boolean force) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("配方版本至少需要一筆原料");
         }
 
-        List<RecipeVersionItem> existingItems = version.getItems().stream()
+        List<RecipeVersionItem> existingItems = recipeVersionItemRepository.findByRecipeVersionIdOrderByDisplayOrderAscIdAsc(version.getId()).stream()
             .sorted(Comparator.comparing(item -> item.getDisplayOrder() == null ? Integer.MAX_VALUE : item.getDisplayOrder()))
             .toList();
-        if (existingItems.size() != requests.size()) {
+        if (!force && existingItems.size() != requests.size()) {
             throw new IllegalArgumentException("版本編輯不可刪除原料明細，請到配方版本項目頁處理");
         }
 
         Set<Long> materialIds = new HashSet<>();
         Set<Integer> displayOrders = new HashSet<>();
-        for (int index = 0; index < requests.size(); index++) {
+        int updateCount = force ? Math.min(existingItems.size(), requests.size()) : requests.size();
+        for (int index = 0; index < updateCount; index++) {
             RecipeVersionItemRequest request = requests.get(index);
             if (!materialIds.add(request.materialId())) {
                 throw new IllegalArgumentException("同一配方版本內不能重複使用相同原料");
@@ -192,7 +214,7 @@ public class RecipeVersionService {
             version.getBaseWeightG(),
             version.getStatus().name(),
             version.getCreatedBy(),
-            version.getItems().stream()
+            recipeVersionItemRepository.findByRecipeVersionIdOrderByDisplayOrderAscIdAsc(version.getId()).stream()
                 .sorted(Comparator.comparing(item -> item.getDisplayOrder() == null ? Integer.MAX_VALUE : item.getDisplayOrder()))
                 .map(this::toItemResponse)
                 .toList()

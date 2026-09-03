@@ -105,9 +105,7 @@ class ProductCrudIntegrationTest extends AbstractH2IntegrationTest {
             .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/products/{id}", productId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.active").value(false))
-            .andExpect(jsonPath("$.productCode").value("PRD-901A"));
+            .andExpect(status().isNotFound());
     }
 
     @Test

@@ -114,7 +114,7 @@ class PurchaseSuggestionIntegrationTest extends AbstractH2IntegrationTest {
             .andExpect(jsonPath("$.items[0].requiredWeightG").value(200))
             .andExpect(jsonPath("$.items[0].stockWeightG").value(150))
             .andExpect(jsonPath("$.items[0].shortageWeightG").value(50))
-            .andExpect(jsonPath("$.items[0].purchaseSuggestionWeightG").value(50))
+            .andExpect(jsonPath("$.items[0].purchaseSuggestionWeightG").value(200))
             .andExpect(jsonPath("$.items[0].sources.length()").value(2))
             .andExpect(jsonPath("$.items[0].sources[0].productCode").exists())
             .andExpect(jsonPath("$.items[0].sources[0].recipeCode").exists());

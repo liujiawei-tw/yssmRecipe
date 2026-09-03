@@ -84,14 +84,12 @@ public class RecipeVersionItemService {
         ensureUniqueWithinVersion(version.getId(), null, material.getId(), request.displayOrder());
 
         RecipeVersionItem item = new RecipeVersionItem(version, material, request.ratio(), request.displayOrder());
-        RecipeVersionItemDetailResponse response = toResponse(recipeVersionItemRepository.save(item));
-        recipeVersionItemSearchService.reindexAll();
-        return response;
+        return toResponse(recipeVersionItemRepository.save(item));
     }
 
     @Transactional
     @CacheEvict(cacheNames = "recipeVersionItemSearch", allEntries = true)
-    public RecipeVersionItemDetailResponse update(Long id, RecipeVersionItemUpsertRequest request) {
+    public RecipeVersionItemDetailResponse update(Long id, RecipeVersionItemUpsertRequest request, boolean force) {
         RecipeVersionItem item = find(id);
         RecipeVersion sourceVersion = item.getRecipeVersion();
         RecipeVersion targetVersion = findVersion(request.recipeVersionId());
@@ -101,27 +99,29 @@ public class RecipeVersionItemService {
             throw new IllegalArgumentException("配方版本至少需要一筆原料");
         }
 
-        ensureUniqueWithinVersion(targetVersion.getId(), item.getId(), material.getId(), request.displayOrder());
+        if (force) {
+            normalizeDisplayOrder(targetVersion.getId(), item.getId(), request.displayOrder());
+        } else {
+            ensureUniqueWithinVersion(targetVersion.getId(), item.getId(), material.getId(), request.displayOrder());
+        }
+        ensureUniqueMaterialWithinVersion(targetVersion.getId(), item.getId(), material.getId());
 
         item.setRecipeVersion(targetVersion);
         item.setMaterial(material);
         item.setRatio(request.ratio());
         item.setDisplayOrder(request.displayOrder());
-        RecipeVersionItemDetailResponse response = toResponse(recipeVersionItemRepository.save(item));
-        recipeVersionItemSearchService.reindexAll();
-        return response;
+        return toResponse(recipeVersionItemRepository.save(item));
+    }
+
+    public RecipeVersionItemDetailResponse update(Long id, RecipeVersionItemUpsertRequest request) {
+        return update(id, request, false);
     }
 
     @Transactional
     @CacheEvict(cacheNames = "recipeVersionItemSearch", allEntries = true)
     public void delete(Long id) {
         RecipeVersionItem item = find(id);
-        Long versionId = item.getRecipeVersion().getId();
-        if (recipeVersionItemRepository.countByRecipeVersionId(versionId) <= 1) {
-            throw new IllegalArgumentException("配方版本至少需要一筆原料");
-        }
         recipeVersionItemRepository.delete(item);
-        recipeVersionItemSearchService.reindexAll();
     }
 
     @Transactional(readOnly = true)
@@ -213,6 +213,7 @@ public class RecipeVersionItemService {
                 .collect(Collectors.groupingBy(ImportRow::versionKey, LinkedHashMap::new, Collectors.toList()));
 
             int importedVersionCount = 0;
+            List<RecipeVersionItem> itemsToSave = new ArrayList<>();
             for (List<ImportRow> groupRows : groupedRows.values()) {
                 ImportRow firstRow = groupRows.get(0);
                 RecipeVersion version = findOrCreateVersion(firstRow);
@@ -231,18 +232,18 @@ public class RecipeVersionItemService {
                     if (existingItem != null) {
                         existingItem.setRatio(row.ratio());
                         existingItem.setDisplayOrder(displayOrder);
-                        recipeVersionItemRepository.save(existingItem);
+                        itemsToSave.add(existingItem);
                         continue;
                     }
 
                     RecipeVersionItem newItem = new RecipeVersionItem(version, material, row.ratio(), displayOrder);
-                    recipeVersionItemRepository.save(newItem);
+                    itemsToSave.add(newItem);
                 }
 
                 importedVersionCount++;
             }
 
-            recipeVersionItemSearchService.reindexAll();
+            recipeVersionItemRepository.saveAll(itemsToSave);
             return new RecipeVersionItemImportResult(importedVersionCount, rows.size());
         } catch (IOException ex) {
             throw new IllegalArgumentException("匯入 Excel 失敗: " + ex.getMessage(), ex);
@@ -298,6 +299,32 @@ public class RecipeVersionItemService {
             .anyMatch(item -> !item.getId().equals(currentItemId) && item.getDisplayOrder().equals(displayOrder));
         if (duplicateDisplayOrder) {
             throw new IllegalArgumentException("同一配方版本內的排序不能重複");
+        }
+    }
+
+    private void ensureUniqueMaterialWithinVersion(Long recipeVersionId, Long currentItemId, Long materialId) {
+        boolean duplicateMaterial = recipeVersionItemRepository.findByRecipeVersionIdOrderByDisplayOrderAscIdAsc(recipeVersionId).stream()
+            .anyMatch(item -> !item.getId().equals(currentItemId) && item.getMaterial().getId().equals(materialId));
+        if (duplicateMaterial) {
+            throw new IllegalArgumentException("同一配方版本內不能重複使用相同原料");
+        }
+    }
+
+    private void normalizeDisplayOrder(Long recipeVersionId, Long currentItemId, Integer requestedDisplayOrder) {
+        List<RecipeVersionItem> siblings = recipeVersionItemRepository.findByRecipeVersionIdOrderByDisplayOrderAscIdAsc(recipeVersionId).stream()
+            .filter(item -> !item.getId().equals(currentItemId))
+            .toList();
+        int nextOrder = requestedDisplayOrder == null ? 1 : requestedDisplayOrder + 1;
+        List<RecipeVersionItem> changedItems = new ArrayList<>();
+        for (RecipeVersionItem sibling : siblings) {
+            if (sibling.getDisplayOrder() == null || sibling.getDisplayOrder() < nextOrder) {
+                continue;
+            }
+            sibling.setDisplayOrder(nextOrder++);
+            changedItems.add(sibling);
+        }
+        if (!changedItems.isEmpty()) {
+            recipeVersionItemRepository.saveAll(changedItems);
         }
     }
 

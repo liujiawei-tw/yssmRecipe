@@ -44,7 +44,7 @@ public class PurchaseSuggestionService {
 
     @Transactional
     public PurchaseSuggestionResponse generate() {
-        List<ProductionPlan> productionPlans = productionPlanRepository.findAllWithDetailsOrderByCreatedAtDescIdDesc();
+        List<ProductionPlan> productionPlans = findCurrentProductionPlans();
 
         Map<Long, MaterialAggregate> aggregates = new LinkedHashMap<>();
         for (ProductionPlan plan : productionPlans) {
@@ -83,7 +83,7 @@ public class PurchaseSuggestionService {
             item.setRequiredWeightG(aggregate.requiredWeightG);
             item.setStockWeightG(stockWeight);
             item.setShortageWeightG(shortageWeight);
-            item.setPurchaseSuggestionWeightG(shortageWeight);
+            item.setPurchaseSuggestionWeightG(aggregate.requiredWeightG);
             item.setInventoryAvailable(snapshot != null);
             if (snapshot != null) {
                 item.setInventoryImportedAt(snapshot.getImportedAt());
@@ -146,6 +146,13 @@ public class PurchaseSuggestionService {
             .orElseThrow(() -> new NotFoundException("找不到請購建議分析: " + id));
     }
 
+    private List<ProductionPlan> findCurrentProductionPlans() {
+        return productionPlanRepository.findFirstByPlanningBatchKeyIsNotNullOrderByCreatedAtDescIdDesc()
+            .map(ProductionPlan::getPlanningBatchKey)
+            .map(productionPlanRepository::findByPlanningBatchKeyWithDetails)
+            .orElseGet(productionPlanRepository::findAllWithDetailsOrderByCreatedAtDescIdDesc);
+    }
+
     private PurchaseSuggestionResponse toResponse(PurchaseSuggestionAnalysis analysis) {
         List<PurchaseSuggestionItemResponse> items = analysis.getItems().stream()
             .sorted(Comparator.comparing(PurchaseSuggestionItem::getMaterialCode))
@@ -193,11 +200,11 @@ public class PurchaseSuggestionService {
     }
 
     private void writeSummarySheet(Workbook workbook, PurchaseSuggestionAnalysis analysis) {
-        Sheet sheet = workbook.createSheet("請購建議");
+        Sheet sheet = workbook.createSheet("總原料需求");
         CellStyle headerStyle = createHeaderStyle(workbook);
 
         Row title = sheet.createRow(0);
-        title.createCell(0).setCellValue("請購建議分析");
+        title.createCell(0).setCellValue("總原料需求分析");
         title.createCell(1).setCellValue("分析編號");
         title.createCell(2).setCellValue(analysis.getId());
         title.createCell(3).setCellValue("產生時間");
@@ -213,7 +220,7 @@ public class PurchaseSuggestionService {
 
         Row header = sheet.createRow(4);
         String[] headers = {
-            "原料代號", "原料名稱", "需求重量(g)", "庫存重量(g)", "缺料重量(g)", "請購建議(g)", "是否有庫存資料", "庫存匯入時間", "來源檔名"
+            "原料代號", "原料名稱", "需求重量(g)", "庫存重量(g)", "總原料需求(g)", "缺料重量(g)", "是否有庫存資料", "庫存匯入時間", "來源檔名"
         };
         for (int i = 0; i < headers.length; i++) {
             Cell cell = header.createCell(i);
@@ -228,8 +235,8 @@ public class PurchaseSuggestionService {
             row.createCell(1).setCellValue(item.getMaterialName());
             row.createCell(2).setCellValue(item.getRequiredWeightG().doubleValue());
             row.createCell(3).setCellValue(item.getStockWeightG().doubleValue());
-            row.createCell(4).setCellValue(item.getShortageWeightG().doubleValue());
-            row.createCell(5).setCellValue(item.getPurchaseSuggestionWeightG().doubleValue());
+            row.createCell(4).setCellValue(item.getPurchaseSuggestionWeightG().doubleValue());
+            row.createCell(5).setCellValue(item.getShortageWeightG().doubleValue());
             row.createCell(6).setCellValue(item.isInventoryAvailable() ? "是" : "否");
             row.createCell(7).setCellValue(item.getInventoryImportedAt() == null ? "" : String.valueOf(item.getInventoryImportedAt()));
             row.createCell(8).setCellValue(item.getInventorySourceFileName() == null ? "" : item.getInventorySourceFileName());

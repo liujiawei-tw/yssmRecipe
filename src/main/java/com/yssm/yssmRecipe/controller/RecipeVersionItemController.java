@@ -60,8 +60,12 @@ public class RecipeVersionItemController {
     }
 
     @PutMapping("/{id}")
-    public RecipeVersionItemDetailResponse update(@PathVariable Long id, @Valid @RequestBody RecipeVersionItemUpsertRequest request) {
-        return recipeVersionItemService.update(id, request);
+    public RecipeVersionItemDetailResponse update(
+        @PathVariable Long id,
+        @RequestParam(defaultValue = "false") boolean force,
+        @Valid @RequestBody RecipeVersionItemUpsertRequest request
+    ) {
+        return recipeVersionItemService.update(id, request, force);
     }
 
     @DeleteMapping("/{id}")

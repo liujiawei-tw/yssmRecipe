@@ -24,4 +24,6 @@ public interface RecipeVersionRepository extends JpaRepository<RecipeVersion, Lo
 
     @EntityGraph(attributePaths = {"recipe", "items", "items.material"})
     List<RecipeVersion> findAllByOrderByRecipeIdAscVersionDateDescIdDesc();
+
+    void deleteByRecipeId(Long recipeId);
 }

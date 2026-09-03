@@ -68,6 +68,9 @@ public class ProductionPlan {
     @Column(nullable = false, length = 32)
     private String status = "CALCULATED";
 
+    @Column(name = "planning_batch_key", length = 64)
+    private String planningBatchKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

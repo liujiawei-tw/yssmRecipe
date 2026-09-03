@@ -8,6 +8,12 @@ public interface PurchaseSuggestionItemSourceRepository extends JpaRepository<Pu
 
     void deleteByProductionPlanRecipeVersionRecipeId(Long recipeId);
 
+    void deleteByProductionPlanRecipeVersionId(Long recipeVersionId);
+
+    void deleteByMaterialRequirementRecipeVersionId(Long recipeVersionId);
+
+    void deleteByMaterialRequirementRecipeVersionRecipeId(Long recipeId);
+
     void deleteByItemMaterialId(Long materialId);
 
     void deleteByMaterialRequirementMaterialId(Long materialId);

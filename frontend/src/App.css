@@ -1197,10 +1197,16 @@ button {
   gap: 4px;
 }
 
-.recipe-version-items-shell .query-version-meta span {
+.recipe-version-items-shell .query-version-meta span:not(.data-status) {
   color: #607086;
   font-size: 13px;
   font-weight: 700;
+}
+
+.recipe-version-items-shell .query-version-meta .data-status {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: max-content;
 }
 
 .recipe-version-items-shell .query-edit-stack {
@@ -2700,7 +2706,7 @@ td span {
 }
 
 .app-layout .recipe-version-items-shell .query-row-text span,
-.app-layout .recipe-version-items-shell .query-version-meta span {
+.app-layout .recipe-version-items-shell .query-version-meta span:not(.data-status) {
   color: #71717a;
   font-size: 11px;
 }
@@ -2921,7 +2927,7 @@ td span {
 }
 
 .app-layout .recipe-version-items-shell .query-hierarchy-table .query-row-text span,
-.app-layout .recipe-version-items-shell .query-hierarchy-table .query-version-meta span {
+.app-layout .recipe-version-items-shell .query-hierarchy-table .query-version-meta span:not(.data-status) {
   color: #6c757d;
   font-size: 11px;
 }

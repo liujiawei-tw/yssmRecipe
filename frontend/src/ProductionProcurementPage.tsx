@@ -81,6 +81,9 @@ const formatCalculationMode = (value: string) => (value === 'SYSTEM' ? '系統�
 
 const formatDateTime = (value: string) => new Date(value).toLocaleString('zh-TW')
 
+const formatCalculationWeightFormula = (plan: ProductionPlan) =>
+  `${formatDecimal(plan.plannedQuantity)} ${plan.erpUnit} × ${formatDecimal(plan.gramWeightPerErpUnit)} g/${plan.erpUnit} = ${formatDecimal(plan.calculationWeightG)} g`
+
 const csvEscape = (value: string | number | boolean | null | undefined) => {
   const text = value == null ? '' : String(value)
   return `"${text.replace(/"/g, '""')}"`
@@ -303,7 +306,7 @@ function ProductionProcurementPage() {
       setAnalysisError(null)
 
       const csv = toCsv(
-        ['分析編號', '產生時間', '原料代號', '原料名稱', '需求(g)', '庫存(g)', '缺料(g)', '請購建議(g)', '來源數'],
+        ['分析編號', '產生時間', '原料代號', '原料名稱', '需求(g)', '庫存(g)', '總原料需求(g)', '缺料(g)', '來源數'],
         visibleAnalysis.items.map((item) => [
           visibleAnalysis.id,
           formatDateTime(visibleAnalysis.generatedAt),
@@ -311,8 +314,8 @@ function ProductionProcurementPage() {
           item.materialName,
           item.requiredWeightG,
           item.stockWeightG,
-          item.shortageWeightG,
           item.purchaseSuggestionWeightG,
+          item.shortageWeightG,
           item.sources.length,
         ]),
       )
@@ -371,7 +374,7 @@ function ProductionProcurementPage() {
 
         <div className="table-wrap procurement-table-wrap">
           <table className="merged-table procurement-merged-table">
-            <thead><tr><th>操作</th><th>原料品項</th><th className="num">需求量</th><th className="num">現有庫存</th><th className="num">缺料數量</th><th className="num">建議請購</th><th>來源狀態</th></tr></thead>
+            <thead><tr><th>操作</th><th>原料品項</th><th className="num">需求量</th><th className="num">現有庫存</th><th className="num">總原料需求</th><th className="num">缺料數量</th><th>來源狀態</th></tr></thead>
             <tbody>
               {visibleAnalysis ? visibleAnalysis.items.map((item) => {
                 const expanded = expandedAnalysisItemIds.includes(item.id)
@@ -381,8 +384,8 @@ function ProductionProcurementPage() {
                     <td><span className="procurement-code">{item.materialCode}</span><strong>{item.materialName}</strong></td>
                     <td className="num">{formatDecimal(item.requiredWeightG)} g</td>
                     <td className="num">{formatDecimal(item.stockWeightG)} g<span className="subtext">{item.inventoryAvailable ? '盤點確認' : '無盤點資料'}</span></td>
-                    <td className="num"><span className="procurement-danger-badge">{formatDecimal(item.shortageWeightG)} g</span></td>
                     <td className="num"><strong>{formatDecimal(item.purchaseSuggestionWeightG)} g</strong></td>
+                    <td className="num"><span className="procurement-danger-badge">{formatDecimal(item.shortageWeightG)} g</span></td>
                     <td><strong>{item.sources.length} 筆來源</strong><span className="procurement-link">{expanded ? '已展開' : '檢視明細'}</span></td>
                   </tr>
                   {expanded ? <tr className="merged-detail-row"><td colSpan={7}><div className="procurement-detail-panel"><strong className="detail-kicker">[{item.materialCode} {item.materialName}] 需求來源拆解明細</strong><div className="table-wrap nested-table-wrap"><table className="nested-table purchase-table"><thead><tr><th>來源商品</th><th>配方名稱</th><th>版本日期</th><th className="num">規劃產量</th><th className="num">總重換算</th><th className="num">原料需求</th></tr></thead><tbody>{item.sources.map((source) => <tr key={source.materialRequirementId}><td><span className="procurement-code">{source.productCode}</span><strong>{source.productName}</strong></td><td>{source.recipeName}<span className="subtext">{source.recipeCode}</span></td><td>{source.recipeVersionDate}</td><td className="num">{formatDecimal(source.plannedQuantity)}</td><td className="num">{formatDecimal(source.calculationWeightG)} g</td><td className="num">{formatDecimal(source.requiredWeightG)} g</td></tr>)}{!item.sources.length ? <tr><td colSpan={6}><div className="empty-table">這筆原料沒有來源資料。</div></td></tr> : null}</tbody></table></div></div></td></tr> : null}
@@ -454,7 +457,7 @@ function ProductionProcurementPage() {
                         <strong>
                           {formatDecimal(plan.plannedQuantity)} {plan.erpUnit}
                         </strong>
-                        <span>{formatDecimal(plan.calculationWeightG)} g</span>
+                        <span>{formatCalculationWeightFormula(plan)}</span>
                       </td>
                       <td>
                       <strong>{formatCalculationMode(plan.calculationMode)}</strong>
@@ -482,7 +485,7 @@ function ProductionProcurementPage() {
                               </div>
                               <div>
                                 <span>換算重量</span>
-                                <strong>{formatDecimal(plan.calculationWeightG)} g</strong>
+                                <strong>{formatCalculationWeightFormula(plan)}</strong>
                               </div>
                             </div>
 

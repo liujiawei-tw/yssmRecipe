@@ -469,8 +469,9 @@ export function RecipeVersionBatchManager() {
       if (recipeEditingId === recipeId) {
         cancelRecipeEdit()
       }
-      await loadBaseData()
-      await loadQueryItems({ search: querySearchText })
+      setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId))
+      setQueryItems((current) => current.filter((item) => item.recipeId !== recipeId))
+      setExpandedRecipeIds((current) => current.filter((id) => id !== recipeId))
     } catch (err) {
       setError(err instanceof Error ? err.message : '刪除配方失敗')
     } finally {
@@ -520,7 +521,7 @@ export function RecipeVersionBatchManager() {
     try {
       setSaving(true)
       setError(null)
-      const response = await fetch(`/api/recipe-versions/${versionEditingId}`, {
+      const response = await fetch(`/api/recipe-versions/${versionEditingId}?force=true`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -538,9 +539,21 @@ export function RecipeVersionBatchManager() {
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, '更新版本失敗'))
       }
+      const updatedVersion = (await response.json()) as RecipeVersion
+      setQueryItems((current) =>
+        current.map((item) =>
+          item.recipeVersionId === updatedVersion.id
+            ? {
+                ...item,
+                versionDate: updatedVersion.versionDate,
+                versionStatus: updatedVersion.status,
+                baseWeightG: updatedVersion.baseWeightG,
+              }
+            : item,
+        ),
+      )
       setNotice('已更新版本')
       cancelVersionEdit()
-      await loadQueryItems({ search: querySearchText })
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新版本失敗')
     } finally {
@@ -564,7 +577,8 @@ export function RecipeVersionBatchManager() {
       if (versionEditingId === versionId) {
         cancelVersionEdit()
       }
-      await loadQueryItems({ search: querySearchText })
+      setQueryItems((current) => current.filter((item) => item.recipeVersionId !== versionId))
+      setExpandedVersionIds((current) => current.filter((id) => id !== versionId))
     } catch (err) {
       setError(err instanceof Error ? err.message : '刪除版本失敗')
     } finally {
@@ -639,7 +653,7 @@ export function RecipeVersionBatchManager() {
       if (!target) {
         throw new Error('找不到要更新的查詢結果')
       }
-      const response = await fetch(`/api/recipe-version-items/${queryEditingId}`, {
+      const response = await fetch(`/api/recipe-version-items/${queryEditingId}?force=true`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -652,9 +666,10 @@ export function RecipeVersionBatchManager() {
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, '更新查詢結果失敗'))
       }
+      const updatedItem = (await response.json()) as RecipeVersionItemDetail
+      setQueryItems((current) => current.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
       setNotice('已更新查詢結果')
       cancelQueryEdit()
-      await loadQueryItems()
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新查詢結果失敗')
     } finally {
@@ -680,7 +695,7 @@ export function RecipeVersionBatchManager() {
       if (queryEditingId === row.id) {
         cancelQueryEdit()
       }
-      await loadQueryItems()
+      setQueryItems((current) => current.filter((item) => item.id !== row.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : '刪除失敗')
     } finally {

@@ -66,8 +66,8 @@ public class InventoryImportService {
                 .orElseThrow(() -> new IllegalArgumentException("找不到商品代號: " + row.code()));
             snapshots.add(new ProductStockSnapshot(product, stockQuantity, safeFileName(file)));
         }
-        productStockSnapshotRepository.saveAll(snapshots);
-        refreshPlanningData();
+        List<ProductStockSnapshot> savedSnapshots = productStockSnapshotRepository.saveAll(snapshots);
+        refreshPlanningData(savedSnapshots);
         return new InventoryImportResponse(safeFileName(file), "PRODUCT", snapshots.size(), Instant.now());
     }
 
@@ -90,16 +90,24 @@ public class InventoryImportService {
             snapshots.add(new MaterialInventorySnapshot(material, stockQuantity, safeFileName(file)));
         }
         materialInventorySnapshotRepository.saveAll(snapshots);
-        refreshPlanningData();
+        refreshPurchaseSuggestion();
         return new InventoryImportResponse(safeFileName(file), "MATERIAL", snapshots.size(), Instant.now());
     }
 
-    private void refreshPlanningData() {
+    private void refreshPlanningData(List<ProductStockSnapshot> productStockSnapshots) {
         try {
-            productionPlanService.refreshFromLatestInventory();
+            productionPlanService.refreshFromProductStockSnapshots(productStockSnapshots);
             purchaseSuggestionService.generate();
         } catch (RuntimeException ex) {
             log.warn("庫存匯入完成，但更新生產計畫/請購分析失敗", ex);
+        }
+    }
+
+    private void refreshPurchaseSuggestion() {
+        try {
+            purchaseSuggestionService.generate();
+        } catch (RuntimeException ex) {
+            log.warn("庫存匯入完成，但更新請購分析失敗", ex);
         }
     }
 

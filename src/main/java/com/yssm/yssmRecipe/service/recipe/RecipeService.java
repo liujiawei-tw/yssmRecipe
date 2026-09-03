@@ -4,11 +4,17 @@ import com.yssm.yssmRecipe.domain.recipe.Recipe;
 import com.yssm.yssmRecipe.dto.recipe.RecipeResponse;
 import com.yssm.yssmRecipe.dto.recipe.RecipeUpsertRequest;
 import com.yssm.yssmRecipe.exception.NotFoundException;
+import com.yssm.yssmRecipe.repository.MaterialRequirementRepository;
+import com.yssm.yssmRecipe.repository.ProductionPlanRepository;
+import com.yssm.yssmRecipe.repository.ProductRecipeMappingRepository;
+import com.yssm.yssmRecipe.repository.PurchaseSuggestionItemSourceRepository;
 import com.yssm.yssmRecipe.repository.RecipeRepository;
+import com.yssm.yssmRecipe.repository.RecipeVersionItemRepository;
+import com.yssm.yssmRecipe.repository.RecipeVersionRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class RecipeService {
 
     private final RecipeRepository recipeRepository;
+    private final RecipeVersionRepository recipeVersionRepository;
+    private final RecipeVersionItemRepository recipeVersionItemRepository;
+    private final MaterialRequirementRepository materialRequirementRepository;
+    private final ProductionPlanRepository productionPlanRepository;
+    private final ProductRecipeMappingRepository productRecipeMappingRepository;
+    private final PurchaseSuggestionItemSourceRepository purchaseSuggestionItemSourceRepository;
 
     @Transactional(readOnly = true)
     public List<RecipeResponse> list() {
@@ -63,10 +75,17 @@ public class RecipeService {
     public void delete(Long id) {
         Recipe recipe = find(id);
         try {
+            purchaseSuggestionItemSourceRepository.deleteByProductionPlanRecipeVersionRecipeId(id);
+            purchaseSuggestionItemSourceRepository.deleteByMaterialRequirementRecipeVersionRecipeId(id);
+            materialRequirementRepository.deleteByRecipeVersionRecipeId(id);
+            productionPlanRepository.deleteByRecipeVersionRecipeId(id);
+            productRecipeMappingRepository.deleteByRecipeId(id);
+            recipeVersionItemRepository.deleteByRecipeVersionRecipeId(id);
+            recipeVersionRepository.deleteByRecipeId(id);
             recipeRepository.delete(recipe);
             recipeRepository.flush();
         } catch (DataIntegrityViolationException ex) {
-            throw new IllegalArgumentException("配方仍被歷史資料或明細引用，無法刪除", ex);
+            throw new IllegalArgumentException("配方仍被其他資料引用，無法刪除", ex);
         }
     }
 

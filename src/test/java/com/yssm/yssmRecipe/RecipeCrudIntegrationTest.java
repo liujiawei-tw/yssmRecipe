@@ -71,9 +71,7 @@ class RecipeCrudIntegrationTest extends AbstractH2IntegrationTest {
             .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/recipes/{id}", recipeId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.active").value(false))
-            .andExpect(jsonPath("$.recipeCode").value("REC-901A"));
+            .andExpect(status().isNotFound());
     }
 
     @Test

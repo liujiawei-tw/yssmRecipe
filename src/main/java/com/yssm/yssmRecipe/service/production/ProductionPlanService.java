@@ -5,6 +5,7 @@ import com.yssm.yssmRecipe.domain.recipe.MaterialRequirement;
 import com.yssm.yssmRecipe.domain.recipe.Product;
 import com.yssm.yssmRecipe.domain.recipe.ProductPackaging;
 import com.yssm.yssmRecipe.domain.recipe.ProductRecipeMapping;
+import com.yssm.yssmRecipe.domain.recipe.ProductStockSnapshot;
 import com.yssm.yssmRecipe.domain.recipe.ProductionPlan;
 import com.yssm.yssmRecipe.domain.recipe.RecipeVersion;
 import com.yssm.yssmRecipe.dto.production.MaterialRequirementResponse;
@@ -23,7 +24,7 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -57,8 +58,6 @@ public class ProductionPlanService {
     public ProductionPlanResponse create(ProductionPlanRequest request) {
         Product product = productRepository.findById(request.productId())
             .orElseThrow(() -> new NotFoundException("找不到商品: " + request.productId()));
-        ProductPackaging packaging = productService.findActivePackaging(product.getId());
-        ProductRecipeMapping mapping = productService.findPrimaryRecipeMapping(product.getId());
 
         Integer currentStock = request.currentStock();
         if (currentStock == null) {
@@ -73,9 +72,15 @@ public class ProductionPlanService {
             ? (request.plannedQuantity() == null ? CalculationMode.SYSTEM : CalculationMode.MANUAL)
             : request.calculationMode();
 
+        return createPlan(product, currentStock, suggestedQuantity, plannedQuantity, calculationMode, null);
+    }
+
+    private ProductionPlanResponse createPlan(Product product, Integer currentStock, int suggestedQuantity, int plannedQuantity, CalculationMode calculationMode, String planningBatchKey) {
+        ProductPackaging packaging = productService.findActivePackaging(product.getId());
+        ProductRecipeMapping mapping = productService.findPrimaryRecipeMapping(product.getId());
+
         BigDecimal calculationWeightG = packaging.getGramWeightPerErpUnit().multiply(BigDecimal.valueOf(plannedQuantity));
         RecipeVersion recipeVersion = recipeVersionService.findLatestEntityByRecipeId(mapping.getRecipe().getId());
-        RecipeCalculationResult calculationResult = recipeCalculationService.calculate(recipeVersion, calculationWeightG);
 
         ProductionPlan plan = new ProductionPlan();
         plan.setProduct(product);
@@ -88,19 +93,23 @@ public class ProductionPlanService {
         plan.setGramWeightPerErpUnit(packaging.getGramWeightPerErpUnit());
         plan.setCalculationWeightG(calculationWeightG);
         plan.setRecipeVersion(recipeVersion);
+        plan.setPlanningBatchKey(planningBatchKey);
 
         List<MaterialRequirement> requirements = new ArrayList<>();
-        for (var item : calculationResult.items()) {
-            MaterialRequirement requirement = new MaterialRequirement(
-                plan,
-                materialRepository.findByMaterialCode(item.materialCode())
-                    .orElseThrow(() -> new NotFoundException("找不到原料: " + item.materialCode())),
-                recipeVersion,
-                item.ratio(),
-                item.percentage(),
-                item.actualWeightG()
-            );
-            requirements.add(requirement);
+        if (calculationWeightG.compareTo(BigDecimal.ZERO) > 0) {
+            RecipeCalculationResult calculationResult = recipeCalculationService.calculate(recipeVersion, calculationWeightG);
+            for (var item : calculationResult.items()) {
+                MaterialRequirement requirement = new MaterialRequirement(
+                    plan,
+                    materialRepository.findByMaterialCode(item.materialCode())
+                        .orElseThrow(() -> new NotFoundException("找不到原料: " + item.materialCode())),
+                    recipeVersion,
+                    item.ratio(),
+                    item.percentage(),
+                    item.actualWeightG()
+                );
+                requirements.add(requirement);
+            }
         }
         plan.setMaterialRequirements(requirements);
         ProductionPlan saved = productionPlanRepository.save(plan);
@@ -124,14 +133,11 @@ public class ProductionPlanService {
 
     @Transactional(readOnly = true)
     public List<ProductionPlanResponse> latest() {
-        List<ProductionPlan> plans = productionPlanRepository.findAllWithDetailsOrderByCreatedAtDescIdDesc();
-        if (plans.isEmpty()) {
-            return List.of();
-        }
-
-        var latestBucket = plans.get(0).getCreatedAt().truncatedTo(ChronoUnit.MINUTES);
-        return plans.stream()
-            .takeWhile(plan -> plan.getCreatedAt().truncatedTo(ChronoUnit.MINUTES).equals(latestBucket))
+        return productionPlanRepository.findFirstByPlanningBatchKeyIsNotNullOrderByCreatedAtDescIdDesc()
+            .map(ProductionPlan::getPlanningBatchKey)
+            .map(productionPlanRepository::findByPlanningBatchKeyWithDetails)
+            .orElseGet(productionPlanRepository::findAllWithDetailsOrderByCreatedAtDescIdDesc)
+            .stream()
             .map(this::toResponse)
             .toList();
     }
@@ -139,6 +145,7 @@ public class ProductionPlanService {
     @Transactional
     public List<ProductionPlanResponse> refreshFromLatestInventory() {
         List<ProductionPlanResponse> refreshedPlans = new ArrayList<>();
+        String planningBatchKey = UUID.randomUUID().toString();
         for (Product product : productRepository.findAll()) {
             if (!product.isActive()) {
                 continue;
@@ -147,7 +154,31 @@ public class ProductionPlanService {
                 continue;
             }
             try {
-                refreshedPlans.add(create(new ProductionPlanRequest(product.getId(), null, null, null)));
+                int currentStock = productStockSnapshotRepository.findTopByProductIdOrderByImportedAtDescIdDesc(product.getId())
+                    .orElseThrow()
+                    .getStockQuantity();
+                int suggestedQuantity = Math.max(product.getMaxStock() - currentStock, 0);
+                refreshedPlans.add(createPlan(product, currentStock, suggestedQuantity, suggestedQuantity, CalculationMode.SYSTEM, planningBatchKey));
+            } catch (RuntimeException ex) {
+                log.warn("商品 {} 缺少完整生產設定，略過生產計畫更新", product.getProductCode(), ex);
+            }
+        }
+        return refreshedPlans;
+    }
+
+    @Transactional
+    public List<ProductionPlanResponse> refreshFromProductStockSnapshots(List<ProductStockSnapshot> snapshots) {
+        String planningBatchKey = UUID.randomUUID().toString();
+        List<ProductionPlanResponse> refreshedPlans = new ArrayList<>();
+        for (ProductStockSnapshot snapshot : snapshots) {
+            Product product = snapshot.getProduct();
+            if (!product.isActive()) {
+                continue;
+            }
+            try {
+                int currentStock = snapshot.getStockQuantity();
+                int suggestedQuantity = Math.max(product.getMaxStock() - currentStock, 0);
+                refreshedPlans.add(createPlan(product, currentStock, suggestedQuantity, suggestedQuantity, CalculationMode.SYSTEM, planningBatchKey));
             } catch (RuntimeException ex) {
                 log.warn("商品 {} 缺少完整生產設定，略過生產計畫更新", product.getProductCode(), ex);
             }

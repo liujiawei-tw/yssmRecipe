@@ -7,9 +7,13 @@ import com.yssm.yssmRecipe.domain.recipe.Recipe;
 import com.yssm.yssmRecipe.dto.product.ProductResponse;
 import com.yssm.yssmRecipe.dto.product.ProductUpsertRequest;
 import com.yssm.yssmRecipe.exception.NotFoundException;
+import com.yssm.yssmRecipe.repository.MaterialRequirementRepository;
 import com.yssm.yssmRecipe.repository.ProductPackagingRepository;
 import com.yssm.yssmRecipe.repository.ProductRecipeMappingRepository;
 import com.yssm.yssmRecipe.repository.ProductRepository;
+import com.yssm.yssmRecipe.repository.ProductStockSnapshotRepository;
+import com.yssm.yssmRecipe.repository.ProductionPlanRepository;
+import com.yssm.yssmRecipe.repository.PurchaseSuggestionItemSourceRepository;
 import com.yssm.yssmRecipe.repository.RecipeRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +28,10 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductPackagingRepository productPackagingRepository;
     private final ProductRecipeMappingRepository productRecipeMappingRepository;
+    private final ProductStockSnapshotRepository productStockSnapshotRepository;
+    private final ProductionPlanRepository productionPlanRepository;
+    private final MaterialRequirementRepository materialRequirementRepository;
+    private final PurchaseSuggestionItemSourceRepository purchaseSuggestionItemSourceRepository;
     private final RecipeRepository recipeRepository;
 
     @Transactional(readOnly = true)
@@ -75,10 +83,16 @@ public class ProductService {
     public void delete(Long id) {
         Product product = find(id);
         try {
+            purchaseSuggestionItemSourceRepository.deleteByProductId(id);
+            materialRequirementRepository.deleteByProductionPlanProductId(id);
+            productionPlanRepository.deleteByProductId(id);
+            productStockSnapshotRepository.deleteByProductId(id);
+            productRecipeMappingRepository.deleteByProductId(id);
+            productPackagingRepository.deleteByProductId(id);
             productRepository.delete(product);
             productRepository.flush();
         } catch (DataIntegrityViolationException ex) {
-            throw new IllegalArgumentException("商品仍被歷史資料或明細引用，無法刪除", ex);
+            throw new IllegalArgumentException("商品仍被其他資料引用，無法刪除", ex);
         }
     }
 
