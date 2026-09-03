@@ -9,6 +9,8 @@ import com.yssm.yssmRecipe.repository.MaterialInventorySnapshotRepository;
 import com.yssm.yssmRecipe.repository.MaterialRepository;
 import com.yssm.yssmRecipe.repository.ProductRepository;
 import com.yssm.yssmRecipe.repository.ProductStockSnapshotRepository;
+import com.yssm.yssmRecipe.service.procurement.PurchaseSuggestionService;
+import com.yssm.yssmRecipe.service.production.ProductionPlanService;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -35,12 +38,15 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class InventoryImportService {
 
     private final ProductRepository productRepository;
     private final MaterialRepository materialRepository;
     private final ProductStockSnapshotRepository productStockSnapshotRepository;
     private final MaterialInventorySnapshotRepository materialInventorySnapshotRepository;
+    private final ProductionPlanService productionPlanService;
+    private final PurchaseSuggestionService purchaseSuggestionService;
 
     @Transactional
     public InventoryImportResponse importProductStock(MultipartFile file) {
@@ -61,6 +67,7 @@ public class InventoryImportService {
             snapshots.add(new ProductStockSnapshot(product, stockQuantity, safeFileName(file)));
         }
         productStockSnapshotRepository.saveAll(snapshots);
+        refreshPlanningData();
         return new InventoryImportResponse(safeFileName(file), "PRODUCT", snapshots.size(), Instant.now());
     }
 
@@ -83,7 +90,17 @@ public class InventoryImportService {
             snapshots.add(new MaterialInventorySnapshot(material, stockQuantity, safeFileName(file)));
         }
         materialInventorySnapshotRepository.saveAll(snapshots);
+        refreshPlanningData();
         return new InventoryImportResponse(safeFileName(file), "MATERIAL", snapshots.size(), Instant.now());
+    }
+
+    private void refreshPlanningData() {
+        try {
+            productionPlanService.refreshFromLatestInventory();
+            purchaseSuggestionService.generate();
+        } catch (RuntimeException ex) {
+            log.warn("庫存匯入完成，但更新生產計畫/請購分析失敗", ex);
+        }
     }
 
     @Transactional(readOnly = true)

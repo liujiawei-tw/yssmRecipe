@@ -1666,7 +1666,7 @@ function ProductManager() {
         <div className="section-header product-list-header"><div className="section-title"><h2>商品清單</h2><p>這裡同時可看安全庫存、最大庫存、ERP 單位與包裝換算。</p></div></div>
         <div className="product-search-row"><input className="search-input" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="搜尋代號、名稱、門檻、單位、配方、包裝說明、狀態" /><button type="button" className="btn btn-primary" onClick={() => setSearchText(searchText.trim())}>查詢</button><button type="button" className="btn" onClick={() => setSearchText('')}>重設</button></div>
         <div className="table-wrap">
-          <table>
+          <table className={editingId ? 'product-table-editing' : undefined}>
             <thead>
               <tr>
                 <th>代號</th>

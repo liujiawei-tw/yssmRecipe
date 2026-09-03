@@ -31,6 +31,11 @@ public class ProductionPlanController {
         return productionPlanService.latest();
     }
 
+    @PostMapping("/refresh-from-inventory")
+    public List<ProductionPlanResponse> refreshFromLatestInventory() {
+        return productionPlanService.refreshFromLatestInventory();
+    }
+
     @PostMapping
     public ProductionPlanResponse create(@Valid @RequestBody ProductionPlanRequest request) {
         return productionPlanService.create(request);

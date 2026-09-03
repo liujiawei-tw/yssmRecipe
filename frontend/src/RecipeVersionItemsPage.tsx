@@ -902,8 +902,8 @@ export function RecipeVersionBatchManager() {
       <section className="workspace-section recipe-version-workspace-section recipe-version-import-workspace">
         <div className="section-header recipe-version-section-header">
           <div className="section-title card-title">
-            <h2>Excel 匯入配方比例資料</h2>
-            <p>上傳 Excel 後，系統會依配方代號、版本日期與原料代號更新整批比例資料。</p>
+            <h2>資料作業</h2>
+            <p>可直接匯入 Excel 配方比例資料，或把目前查詢結果匯出成表格檔。</p>
           </div>
           <button
             type="button"
@@ -917,30 +917,38 @@ export function RecipeVersionBatchManager() {
 
         {showImportPanel ? (
           <div className="section-body recipe-version-section-body">
-            <div className="recipe-version-import-surface">
-              <div className="recipe-version-import-copy">
-              <strong>欄位格式說明：</strong><br />
-              • 欄位 1：<code>recipe_code</code>（配方代號）<br />
-              • 欄位 2：<code>version_date</code>（版本日期，格式 YYYY-MM-DD）<br />
-              • 欄位 3：<code>material_code / ratio</code>（原料代號與比例，排序由系統自動補 ⇪）
+            <div className="recipe-data-ops-grid">
+              <div className="recipe-import-surface recipe-version-import-surface">
+                <div className="recipe-operation-title">批次匯入配方比例資料</div>
+                <div className="recipe-import-file-row recipe-version-import-controls">
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="form-control recipe-version-file-input"
+                    onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                  />
+                  <button type="button" className="btn btn-primary" onClick={() => void importExcel()} disabled={importing}>
+                    {importing ? '匯入中...' : '開始匯入'}
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={() => setImportFile(null)} disabled={importing || !importFile}>
+                    清除檔案
+                  </button>
+                </div>
+                <div className="recipe-operation-note">支援 .xlsx / .xls，欄位需包含配方代號、版本日期、原料代號與比例。</div>
               </div>
-              <div className="recipe-version-import-controls">
-                <input
-                  ref={importInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="form-control recipe-version-file-input"
-                  onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
-                />
-                <button type="button" className="btn btn-primary" onClick={() => void importExcel()} disabled={importing}>
-                {importing ? '匯入中...' : '開始匯入'}
-                </button>
-                <button type="button" className="btn btn-danger" onClick={() => setImportFile(null)} disabled={importing || !importFile}>
-                清除檔案
+              <div className="recipe-export-surface">
+                <div className="recipe-operation-title">將目前配方比例資料下載至本機</div>
+                <button type="button" className="btn recipe-export-button" onClick={() => void exportCsv()} disabled={exporting}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+                  </svg>
+                  {exporting ? '匯出中...' : '匯出所有資料'}
                 </button>
               </div>
-              <span className="subtext recipe-version-import-hint">支援 .xlsx / .xls，請先確認欄位名稱與範例一致。</span>
             </div>
+            {notice ? <div className="notice-banner">{notice}</div> : null}
+            {error ? <div className="error-banner">{error}</div> : null}
           </div>
         ) : null}
       </section>

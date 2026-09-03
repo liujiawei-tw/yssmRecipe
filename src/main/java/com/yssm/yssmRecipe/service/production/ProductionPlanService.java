@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
@@ -41,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductionPlanService {
 
     private final ProductRepository productRepository;
@@ -132,6 +134,25 @@ public class ProductionPlanService {
             .takeWhile(plan -> plan.getCreatedAt().truncatedTo(ChronoUnit.MINUTES).equals(latestBucket))
             .map(this::toResponse)
             .toList();
+    }
+
+    @Transactional
+    public List<ProductionPlanResponse> refreshFromLatestInventory() {
+        List<ProductionPlanResponse> refreshedPlans = new ArrayList<>();
+        for (Product product : productRepository.findAll()) {
+            if (!product.isActive()) {
+                continue;
+            }
+            if (productStockSnapshotRepository.findTopByProductIdOrderByImportedAtDescIdDesc(product.getId()).isEmpty()) {
+                continue;
+            }
+            try {
+                refreshedPlans.add(create(new ProductionPlanRequest(product.getId(), null, null, null)));
+            } catch (RuntimeException ex) {
+                log.warn("商品 {} 缺少完整生產設定，略過生產計畫更新", product.getProductCode(), ex);
+            }
+        }
+        return refreshedPlans;
     }
 
     @Transactional(readOnly = true)

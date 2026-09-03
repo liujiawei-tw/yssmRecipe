@@ -22,8 +22,8 @@ const SIDEBAR_GROUPS: SidebarItem[][] = [
     { page: 'products', label: '商品維護', icon: 'archive' },
   ],
   [
-    { page: 'productionAdvice', label: '生產請購建議', icon: 'clipboard' },
-    { page: 'inventory', label: '庫存匯入', icon: 'database' },
+      { page: 'inventory', label: '庫存匯入', icon: 'database' },
+      { page: 'productionAdvice', label: '生產請購建議', icon: 'clipboard' },
   ],
 ]
 
@@ -153,7 +153,7 @@ export function AppSidebar({ activePage, navigate }: { activePage: PageKey; navi
 
       <footer className="sidebar-footer">
         <span>系統版本</span>
-        <strong>飲料配方管理平台 4.8</strong>
+        <strong>飲料配方管理平台 1.0.0</strong>
       </footer>
     </aside>
   )

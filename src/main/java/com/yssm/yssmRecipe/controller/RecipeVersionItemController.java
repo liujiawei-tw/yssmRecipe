@@ -49,6 +49,16 @@ public class RecipeVersionItemController {
         return recipeVersionItemService.create(request);
     }
 
+    /**
+     * Keep older frontend bundles compatible while they are being refreshed.
+     * The current UI uses /import; multipart requests to the collection path
+     * are still unambiguously treated as Excel imports.
+     */
+    @PostMapping(value = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public RecipeVersionItemImportResult importExcelFromCollection(@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return recipeVersionItemService.importExcel(file);
+    }
+
     @PutMapping("/{id}")
     public RecipeVersionItemDetailResponse update(@PathVariable Long id, @Valid @RequestBody RecipeVersionItemUpsertRequest request) {
         return recipeVersionItemService.update(id, request);
