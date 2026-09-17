@@ -77,9 +77,7 @@ class MaterialCrudIntegrationTest extends AbstractH2IntegrationTest {
             .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/materials/{id}", materialId))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.active").value(false))
-            .andExpect(jsonPath("$.materialCode").value("MAT-901A"));
+            .andExpect(status().isNotFound());
     }
 
     @Test
