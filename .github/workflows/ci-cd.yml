@@ -140,7 +140,7 @@ jobs:
           tags: ${{ steps.backend_meta.outputs.tags }}
           labels: ${{ steps.backend_meta.outputs.labels }}
           cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
+          cache-to: type=gha,scope=backend,mode=max,ignore-error=true
 
       - name: Build and publish frontend image
         uses: docker/build-push-action@v6
@@ -151,4 +151,4 @@ jobs:
           tags: ${{ steps.frontend_meta.outputs.tags }}
           labels: ${{ steps.frontend_meta.outputs.labels }}
           cache-from: type=gha,scope=frontend
-          cache-to: type=gha,scope=frontend,mode=max
+          cache-to: type=gha,scope=frontend,mode=max,ignore-error=true
