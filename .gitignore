@@ -5,6 +5,7 @@ target/
 .env.*
 !.env.example
 !.env.deploy.example
+!.env.deploy.dockerhub.example
 frontend/node_modules/
 frontend/dist/
 frontend/dist-temp/
