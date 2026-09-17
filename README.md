@@ -66,7 +66,7 @@ docker compose -f docker-compose.deploy.yml --env-file .env pull
 docker compose -f docker-compose.deploy.yml --env-file .env up -d
 ```
 
-若客戶端使用 Docker Hub image，可先複製 `.env.deploy.dockerhub.example` 為 `.env`，並把 `your-dockerhub-namespace` 改成實際 Docker Hub 帳號或 organization 名稱。
+部署範本預設使用 Docker Hub image。正式部署建議在 `.env` 使用固定版本 tag，例如 `1.1.2`，避免長期只依賴 `latest`。
 
 預設服務：
 
@@ -93,8 +93,10 @@ Docker Hub image 會使用以下命名規則：
 
 - `<dockerhub-namespace>/yssmrecipe-backend:latest`
 - `<dockerhub-namespace>/yssmrecipe-frontend:latest`
-- `<dockerhub-namespace>/yssmrecipe-backend:vX.Y.Z`
-- `<dockerhub-namespace>/yssmrecipe-frontend:vX.Y.Z`
+- `<dockerhub-namespace>/yssmrecipe-backend:X.Y.Z`
+- `<dockerhub-namespace>/yssmrecipe-frontend:X.Y.Z`
+
+Git tag 仍可使用 `vX.Y.Z`，例如 `v1.1.2`；Docker image tag 會去掉前面的 `v`，發布為 `1.1.2`。
 
 Docker Hub 發布需要在 GitHub repository 的 `Settings` -> `Secrets and variables` -> `Actions` 設定：
 
@@ -114,6 +116,11 @@ docker login ghcr.io
 docker login
 ```
 
+目前正式部署 image：
+
+- `twliujw/yssmrecipe-backend:1.1.2`
+- `twliujw/yssmrecipe-frontend:1.1.2`
+
 ## 版本控管原則
 
 - 所有正式程式碼、設定範本、部署檔與需求文件都進 Git
@@ -126,7 +133,7 @@ docker login
 ```powershell
 git checkout master
 git pull
-git tag vX.Y.Z
+git tag -a vX.Y.Z -m "Release X.Y.Z"
 git push origin vX.Y.Z
 ```
 
@@ -139,7 +146,7 @@ git push origin vX.Y.Z
 - 客戶端電腦的後端連接埠，預設 `18080`
 - 客戶端電腦的 MySQL 對外連接埠，預設 `3307`
 - MySQL 帳號與密碼
-- GitHub Container Registry 是否需要登入
+- Docker Hub image 是否可公開拉取
 - 備份資料要存放在哪個磁碟或資料夾
 - 真實 ERP 商品庫存欄位
 - 真實原料盤點欄位
